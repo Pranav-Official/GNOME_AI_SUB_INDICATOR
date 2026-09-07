@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.opencode-go-usage" path="/org/gnome/shell/extensions/opencode-go-usage/">
+    <key name="opencode-go-key" type="s">
+      <default>''</default>
+      <summary>OpenCode Go API key</summary>
+      <description>Leave empty to auto-read ~/.local/share/opencode/auth.json (opencode-go key). Get a key at https://opencode.ai/auth after subscribing to Go.</description>
+    </key>
+    <key name="codex-access-token" type="s">
+      <default>''</default>
+      <summary>Codex ChatGPT access token</summary>
+      <description>OAuth access token from ~/.codex/auth.json (created by `codex login`). Leave empty to auto-read the file. Never share this token.</description>
+    </key>
+    <key name="codex-account-id" type="s">
+      <default>''</default>
+      <summary>Codex ChatGPT account ID</summary>
+      <description>Account ID from ~/.codex/auth.json alongside the access token. Leave empty to auto-read the file.</description>
+    </key>
+    <key name="codex-auth-path" type="s">
+      <default>''</default>
+      <summary>Codex auth.json path</summary>
+      <description>Leave empty for auto-detect: $CODEX_HOME/auth.json, then ~/.codex/auth.json. Used only when the token fields above are empty.</description>
+    </key>
+    <key name="refresh-minutes" type="i">
+      <range min="2" max="120"/>
+      <default>15</default>
+      <summary>Refresh interval</summary>
+      <description>How often to poll usage endpoints, in minutes.</description>
+    </key>
+    <key name="show-go" type="b">
+      <default>true</default>
+      <summary>Show OpenCode Go</summary>
+      <description>Show OpenCode Go usage in the top bar label.</description>
+    </key>
+    <key name="show-codex" type="b">
+      <default>true</default>
+      <summary>Show Codex</summary>
+      <description>Show Codex subscription usage in the top bar label.</description>
+    </key>
+  </schema>
+</schemalist>

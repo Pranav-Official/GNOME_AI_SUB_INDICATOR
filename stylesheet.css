@@ -1,0 +1,44 @@
+.opencode-go-label {
+    padding: 0 6px;
+    font-weight: 600;
+}
+
+.opencode-go-row {
+    spacing: 4px;
+    min-width: 220px;
+    padding: 0 8px;
+}
+
+.opencode-go-row-line {
+    spacing: 8px;
+}
+
+.opencode-go-row-pct {
+    font-weight: 700;
+}
+
+.opencode-go-bar {
+    min-height: 6px;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.15);
+    width: 220px;
+}
+
+.opencode-go-bar-fill {
+    min-height: 6px;
+    border-radius: 3px;
+    background-color: #3584e4;
+}
+
+.opencode-go-bar-fill.opencode-go-bar-warn {
+    background-color: #e66100;
+}
+
+.usage-tray-header {
+    font-weight: 700;
+}
+
+.usage-tray-sub {
+    font-size: 0.85em;
+    opacity: 0.7;
+}

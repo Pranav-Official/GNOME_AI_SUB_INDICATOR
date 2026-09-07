@@ -1,0 +1,9 @@
+{
+    "uuid": "opencode-go-usage@pranavpp.github.io",
+    "name": "Usage Tray (OpenCode Go + Codex)",
+    "description": "Top bar tray for OpenCode Go and Codex subscription usage. Configure API keys in Extension Manager settings.",
+    "shell-version": ["50", "51"],
+    "url": "https://github.com/pranavpp/opencode-go-usage",
+    "version-name": "2.0",
+    "settings-schema": "org.gnome.shell.extensions.opencode-go-usage"
+}

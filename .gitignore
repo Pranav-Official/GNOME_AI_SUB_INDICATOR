@@ -1,0 +1,29 @@
+# Build artifacts
+schemas/gschemas.compiled
+*.compiled
+
+# GNOME Shell extension zips
+*.zip
+*.shell-extension.zip
+
+# Editor / OS noise
+.vscode/
+.idea/
+*~
+.DS_Store
+Thumbs.db
+
+# Local test overrides — NEVER commit real credentials
+auth.json
+*auth*.json
+*.key
+*.token
+.env
+.env.*
+secrets/
+credentials/
+
+# Node / Python scratch (if you hack on tooling around the extension)
+node_modules/
+__pycache__/
+.venv/
