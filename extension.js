@@ -412,15 +412,27 @@ export default class UsageTrayExtension extends Extension {
     }
 
     _fmtIso(iso) {
+        return this._fmtGoReset(iso) ?? iso;
+    }
+
+    // The Go API returns an absolute UTC timestamp; display the remaining
+    // duration so this matches the OpenCode console instead of local HH:MM.
+    _fmtGoReset(iso) {
         try {
-            return this._fmtTime(new Date(iso));
+            const ms = new Date(iso).getTime() - Date.now();
+            if (Number.isNaN(ms))
+                return null;
+            if (ms <= 0)
+                return 'resetting…';
+            return `resets in ${this._fmtDur(ms / 1000)}`;
         } catch (e) {
-            return iso;
+            return null;
         }
     }
 
     _fmtDur(secs) {
-        secs = Math.max(0, Math.round(secs));
+        // The web consoles floor countdowns rather than rounding them up.
+        secs = Math.max(0, Math.floor(secs));
         const d = Math.floor(secs / 86400);
         const h = Math.floor((secs % 86400) / 3600);
         const m = Math.floor((secs % 3600) / 60);
