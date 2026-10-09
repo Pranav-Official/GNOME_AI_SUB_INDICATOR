@@ -33,8 +33,15 @@ export default class UsageTrayPreferences extends ExtensionPreferences {
         });
         displayGroup.add(showCodex);
 
+        const showClaude = new Adw.SwitchRow({
+            title: _('Show Claude'),
+            subtitle: _('Show Claude Code usage in the top bar label'),
+        });
+        displayGroup.add(showClaude);
+
         settings.bind('show-go', showGo, 'active', Gio.SettingsBindFlags.DEFAULT);
         settings.bind('show-codex', showCodex, 'active', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('show-claude', showClaude, 'active', Gio.SettingsBindFlags.DEFAULT);
 
         const refreshRow = new Adw.SpinRow({
             title: _('Refresh every'),
@@ -132,5 +139,44 @@ export default class UsageTrayPreferences extends ExtensionPreferences {
             description: _('• Token fields override the file when filled. Clear them to go back to auto-read.\n• Tokens refresh automatically when you use Codex; the tray re-reads the file each poll.\n• Keys are stored in dconf (plaintext). Do not share them.'),
         });
         cxPage.add(hintGroup);
+
+        // ---- Claude page ----
+        const ccPage = new Adw.PreferencesPage({
+            title: _('Claude'),
+            icon_name: 'system-run-symbolic',
+        });
+        window.add(ccPage);
+
+        const ccGroup = new Adw.PreferencesGroup({
+            title: _('Claude Code subscription'),
+            description: _('Sign in once with Claude Code. That writes ~/.claude/.credentials.json, which this extension auto-reads. Or paste the values manually below.'),
+        });
+        ccPage.add(ccGroup);
+
+        const ccAuthPath = new Adw.EntryRow({
+            title: _('credentials path'),
+        });
+        ccAuthPath.text = settings.get_string('claude-auth-path');
+        ccAuthPath.connect('notify::text', () => {
+            if (settings.get_string('claude-auth-path') !== ccAuthPath.text)
+                settings.set_string('claude-auth-path', ccAuthPath.text);
+        });
+        ccGroup.add(ccAuthPath);
+
+        const ccToken = new Adw.PasswordEntryRow({
+            title: _('Access token'),
+        });
+        ccToken.text = settings.get_string('claude-access-token');
+        ccToken.connect('notify::text', () => {
+            if (settings.get_string('claude-access-token') !== ccToken.text)
+                settings.set_string('claude-access-token', ccToken.text);
+        });
+        ccGroup.add(ccToken);
+
+        const ccHint = new Adw.PreferencesGroup({
+            title: _('Notes'),
+            description: _('• Token field overrides the file when filled. Clear it to go back to auto-read.\n• The usage endpoint is rate-limited: keep refresh at 15 min, expired tokens refresh when you reopen Claude Code.\n• Keys are stored in dconf (plaintext). Do not share them.'),
+        });
+        ccPage.add(ccHint);
     }
 }

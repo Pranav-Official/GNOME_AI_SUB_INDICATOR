@@ -21,6 +21,16 @@
       <summary>Codex auth.json path</summary>
       <description>Leave empty for auto-detect: $CODEX_HOME/auth.json, then ~/.codex/auth.json. Used only when the token fields above are empty.</description>
     </key>
+    <key name="claude-access-token" type="s">
+      <default>''</default>
+      <summary>Claude Code OAuth access token</summary>
+      <description>OAuth access token from ~/.claude/.credentials.json (claudeAiOauth.accessToken). Leave empty to auto-read the file. Never share this token.</description>
+    </key>
+    <key name="claude-auth-path" type="s">
+      <default>''</default>
+      <summary>Claude credentials path</summary>
+      <description>Leave empty for ~/.claude/.credentials.json. Used only when the token field above is empty.</description>
+    </key>
     <key name="refresh-minutes" type="i">
       <range min="2" max="120"/>
       <default>15</default>
@@ -36,6 +46,11 @@
       <default>true</default>
       <summary>Show Codex</summary>
       <description>Show Codex subscription usage in the top bar label.</description>
+    </key>
+    <key name="show-claude" type="b">
+      <default>true</default>
+      <summary>Show Claude</summary>
+      <description>Show Claude Code subscription usage in the top bar label.</description>
     </key>
   </schema>
 </schemalist>

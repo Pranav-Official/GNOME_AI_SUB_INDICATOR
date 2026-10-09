@@ -10,8 +10,10 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 const GO_USAGE_URL = 'https://opencode.ai/zen/go/v1/usage';
 const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
+const CLAUDE_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
 const GO_CONSOLE_URL = 'https://opencode.ai/auth';
 const CODEX_CONSOLE_URL = 'https://chatgpt.com/codex';
+const CLAUDE_CONSOLE_URL = 'https://claude.ai/settings/usage';
 const BAR_WIDTH = 220;
 
 const GO_AUTH_PATHS = [
@@ -21,19 +23,21 @@ const GO_AUTH_PATHS = [
 
 export default class UsageTrayExtension extends Extension {
     enable() {
-        console.log('usage-tray v2: enable');
+        console.log('usage-tray v2.1: enable');
         try {
             this._settings = this.getSettings();
         } catch (e) {
             // Old cached metadata without settings-schema (needs logout/login).
             // Run with defaults + file auto-read so the tray still works.
-            console.warn(`usage-tray v2: settings unavailable, using defaults: ${e}`);
+            console.warn(`usage-tray v2.1: settings unavailable, using defaults: ${e}`);
             this._settings = null;
         }
         this._goData = null;
         this._cxData = null;
+        this._ccData = null;
         this._goError = null;
         this._cxError = null;
+        this._ccError = null;
         this._signalIds = [];
 
         this._button = new PanelMenu.Button(0.0, this.metadata.name, false);
@@ -51,7 +55,7 @@ export default class UsageTrayExtension extends Extension {
         // Re-render on any pref change. Timer restart on interval change.
         // Settings may be null before a logout/login picks up the new schema.
         if (this._settings) {
-            for (const key of ['opencode-go-key', 'codex-access-token', 'codex-account-id', 'codex-auth-path', 'show-go', 'show-codex']) {
+            for (const key of ['opencode-go-key', 'codex-access-token', 'codex-account-id', 'codex-auth-path', 'claude-access-token', 'claude-auth-path', 'show-go', 'show-codex', 'show-claude']) {
                 this._signalIds.push(this._settings.connect(`changed::${key}`, () => this._refresh()));
             }
             this._signalIds.push(this._settings.connect('changed::refresh-minutes', () => {
@@ -78,7 +82,7 @@ export default class UsageTrayExtension extends Extension {
         this._button = null;
         this._label = null;
         this._settings = null;
-        this._goData = this._cxData = null;
+        this._goData = this._cxData = this._ccData = null;
     }
 
     // ---------- settings / credentials ----------
@@ -154,6 +158,29 @@ export default class UsageTrayExtension extends Extension {
         return {token: null, accountId: null, source: null};
     }
 
+    _resolveClaudeCreds() {
+        const prefToken = this._settings?.get_string('claude-access-token')?.trim();
+        if (prefToken)
+            return {token: prefToken, source: 'prefs'};
+
+        const customPath = this._settings?.get_string('claude-auth-path')?.trim();
+        const candidates = [];
+        if (customPath)
+            candidates.push(customPath);
+        candidates.push(`${GLib.get_home_dir()}/.claude/.credentials.json`);
+
+        for (const p of candidates) {
+            const auth = this._readJsonFile(p);
+            if (!auth)
+                continue;
+            // Shape: {claudeAiOauth: {accessToken}}
+            const token = auth.claudeAiOauth?.accessToken ?? auth.accessToken ?? null;
+            if (token)
+                return {token, source: p};
+        }
+        return {token: null, source: null};
+    }
+
     // ---------- HTTP ----------
 
     _fetchJson(url, headers) {
@@ -182,6 +209,7 @@ export default class UsageTrayExtension extends Extension {
     async _refresh() {
         const showGo = this._settings?.get_boolean('show-go') ?? true;
         const showCx = this._settings?.get_boolean('show-codex') ?? true;
+        const showCc = this._settings?.get_boolean('show-claude') ?? true;
 
         // Fetch independently so one failure doesn't hide the other.
         if (showGo) {
@@ -237,6 +265,44 @@ export default class UsageTrayExtension extends Extension {
             this._cxError = null;
         }
 
+        if (showCc) {
+            const {token} = this._resolveClaudeCreds();
+            if (!token) {
+                this._ccData = null;
+                this._ccError = 'login?';
+            } else {
+                try {
+                    const data = await this._fetchJson(CLAUDE_USAGE_URL, {
+                        'Authorization': `Bearer ${token}`,
+                        'anthropic-beta': 'oauth-2025-04-20',
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'User-Agent': 'claude-code/2.0.0',
+                    });
+                    if (typeof data?.five_hour?.utilization !== 'number' && !Array.isArray(data?.limits))
+                        throw new Error('bad shape');
+                    this._ccData = data;
+                    this._ccError = null;
+                } catch (e) {
+                    const s = `${e}`;
+                    console.warn(`usage-tray: claude refresh failed: ${e}`);
+                    if (s.includes('401') || s.includes('403')) {
+                        this._ccData = null;
+                        this._ccError = 'expired';
+                    } else if (s.includes('429')) {
+                        // Aggressively rate-limited endpoint: keep last good data.
+                        this._ccError = this._ccData ? 'limited' : 'limited';
+                    } else {
+                        this._ccData = null;
+                        this._ccError = 'err';
+                    }
+                }
+            }
+        } else {
+            this._ccData = null;
+            this._ccError = null;
+        }
+
         this._updateLabel();
         this._renderMenu();
     }
@@ -264,11 +330,45 @@ export default class UsageTrayExtension extends Extension {
         return Math.max(...vals);
     }
 
+    _ccPercent() {
+        const d = this._ccData;
+        if (!d)
+            return null;
+        if (typeof d.five_hour?.utilization === 'number')
+            return Math.round(d.five_hour.utilization);
+        const entry = (d.limits ?? []).find(l => l.kind === 'session' && typeof l.percent === 'number');
+        return entry ? Math.round(entry.percent) : null;
+    }
+
+    // Session 5h + weekly 7d only (per user choice; extra model buckets hidden).
+    _ccWindows() {
+        const d = this._ccData;
+        if (!d)
+            return [];
+        const rows = [];
+        if (d.five_hour && typeof d.five_hour.utilization === 'number') {
+            rows.push({title: 'Session · 5h', pct: Math.round(d.five_hour.utilization), resetsAt: d.five_hour.resets_at});
+        } else {
+            const s = (d.limits ?? []).find(l => l.kind === 'session');
+            if (s)
+                rows.push({title: 'Session · 5h', pct: Math.round(s.percent ?? 0), resetsAt: s.resets_at});
+        }
+        if (d.seven_day && typeof d.seven_day.utilization === 'number') {
+            rows.push({title: 'Weekly · 7d', pct: Math.round(d.seven_day.utilization), resetsAt: d.seven_day.resets_at});
+        } else {
+            const w = (d.limits ?? []).find(l => l.kind === 'weekly_all');
+            if (w)
+                rows.push({title: 'Weekly · 7d', pct: Math.round(w.percent ?? 0), resetsAt: w.resets_at});
+        }
+        return rows;
+    }
+
     _updateLabel() {
         if (!this._label)
             return;
         const showGo = this._settings?.get_boolean('show-go') ?? true;
         const showCx = this._settings?.get_boolean('show-codex') ?? true;
+        const showCc = this._settings?.get_boolean('show-claude') ?? true;
         const parts = [];
         if (showGo) {
             const p = this._goPercent();
@@ -277,6 +377,10 @@ export default class UsageTrayExtension extends Extension {
         if (showCx) {
             const p = this._cxPercent();
             parts.push(p === null ? `Cx ${this._cxError ?? '--'}` : `Cx ${p}%`);
+        }
+        if (showCc) {
+            const p = this._ccPercent();
+            parts.push(p === null ? `Cc ${this._ccError ?? '--'}` : `Cc ${p}%`);
         }
         this._label.text = parts.length ? parts.join('  ·  ') : '•';
     }
@@ -321,6 +425,7 @@ export default class UsageTrayExtension extends Extension {
         menu.removeAll();
         const showGo = this._settings?.get_boolean('show-go') ?? true;
         const showCx = this._settings?.get_boolean('show-codex') ?? true;
+        const showCc = this._settings?.get_boolean('show-claude') ?? true;
 
         if (showGo) {
             this._sectionHeader(menu, 'OpenCode Go');
@@ -365,6 +470,32 @@ export default class UsageTrayExtension extends Extension {
             menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         }
 
+        if (showCc) {
+            this._sectionHeader(menu, 'Claude');
+            const rows = this._ccWindows();
+            if (!rows.length) {
+                let msg = `Claude: failed to load (${this._ccError ?? '?'})`;
+                if (this._ccError === 'login?')
+                    msg = 'Claude: sign in via Claude Code or set token in Settings';
+                else if (this._ccError === 'expired')
+                    msg = 'Claude: token expired — reopen Claude Code to refresh';
+                else if (this._ccError === 'limited')
+                    msg = 'Claude: usage endpoint rate-limited — keeping last value';
+                const item = new PopupMenu.PopupMenuItem(msg);
+                item.sensitive = false;
+                menu.addMenuItem(item);
+            } else {
+                for (const r of rows)
+                    this._barRow(menu, r.title, r.pct, r.resetsAt ? this._fmtIso(r.resetsAt) : null);
+                if (this._ccError === 'limited') {
+                    const item = new PopupMenu.PopupMenuItem('Note: rate-limited, showing last value');
+                    item.sensitive = false;
+                    menu.addMenuItem(item);
+                }
+            }
+            menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        }
+
         const updated = new PopupMenu.PopupMenuItem(`Updated ${this._fmtTime(new Date())}`);
         updated.sensitive = false;
         menu.addMenuItem(updated);
@@ -378,6 +509,11 @@ export default class UsageTrayExtension extends Extension {
         if (showCx) {
             menu.addAction('Open Codex usage', () => {
                 Gio.AppInfo.launch_default_for_uri(CODEX_CONSOLE_URL, null);
+            });
+        }
+        if (showCc) {
+            menu.addAction('Open Claude usage', () => {
+                Gio.AppInfo.launch_default_for_uri(CLAUDE_CONSOLE_URL, null);
             });
         }
         menu.addAction('Settings…', () => this.openPreferences());
