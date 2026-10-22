@@ -1,3 +1,4 @@
+import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Soup from 'gi://Soup?version=3.0';
@@ -303,8 +304,13 @@ export default class UsageTrayExtension extends Extension {
             this._ccError = null;
         }
 
-        this._updateLabel();
-        this._renderMenu();
+        try {
+            this._updateLabel();
+            this._renderMenu();
+        } catch (e) {
+            // Never leave a half-built menu without a trace (GNOME 51 broke us here once).
+            console.warn(`usage-tray: render failed: ${e}\n${e?.stack}`);
+        }
     }
 
     // ---------- label ----------
@@ -407,7 +413,8 @@ export default class UsageTrayExtension extends Extension {
         fill.width = Math.round(BAR_WIDTH * Math.max(0, Math.min(100, pct)) / 100);
         track.add_child(fill);
 
-        const box = new St.BoxLayout({vertical: true, style_class: 'opencode-go-row'});
+        // GNOME 51 removed St's `vertical` construct property; use orientation.
+        const box = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'opencode-go-row'});
         box.add_child(line);
         box.add_child(track);
         if (sub) {
